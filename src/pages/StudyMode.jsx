@@ -2,6 +2,34 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
+// Austin's flattering phrases for when Malia finishes a study set
+const austinPhrases = [
+  "Gosh you're so smart and sexy",
+  "Beauty AND brains? That's my girl",
+  "You just made studying look hot",
+  "Einstein wishes he was this cute",
+  "Smarter than Google and twice as gorgeous",
+  "Your brain is almost as attractive as your face... almost",
+  "Did it get hot in here or did you just finish that set?",
+  "Excuse me ma'am, it's illegal to be this smart AND this fine",
+  "That big beautiful brain of yours is showing again",
+  "You're the reason smart is the new sexy",
+  "Brains, beauty, and now flashcard mastery? Triple threat",
+  "I'd swipe right on your intellect any day",
+  "Your neurons are firing and so is my heart",
+  "Certified genius, certified baddie",
+  "You just speedran that set like the queen you are",
+  "Smart girls finish first... and look good doing it",
+  "That was so hot I need a moment",
+  "Your IQ just made my heart skip a beat",
+  "Absolutely crushing it, you brilliant beautiful human",
+  "The only thing bigger than your brain is my boner for you"
+]
+
+const getRandomPhrase = () => {
+  return austinPhrases[Math.floor(Math.random() * austinPhrases.length)]
+}
+
 export default function StudyMode() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -11,6 +39,7 @@ export default function StudyMode() {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isFlipped, setIsFlipped] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [completionPhrase, setCompletionPhrase] = useState('')
 
   useEffect(() => {
     fetchSet()
@@ -63,12 +92,19 @@ export default function StudyMode() {
     setCards(shuffled)
     setCurrentIndex(0)
     setIsFlipped(false)
+    setCompletionPhrase(getRandomPhrase())
   }
 
   const handleReset = () => {
     setCurrentIndex(0)
     setIsFlipped(false)
+    setCompletionPhrase(getRandomPhrase())
   }
+
+  // Set initial phrase on mount
+  useEffect(() => {
+    setCompletionPhrase(getRandomPhrase())
+  }, [])
 
   // Keyboard navigation
   useEffect(() => {
@@ -214,7 +250,14 @@ export default function StudyMode() {
         {currentIndex === cards.length - 1 && isFlipped && (
           <div className="mt-8 text-center">
             <div className="text-2xl mb-2">🎉</div>
-            <p className="text-gray-600 mb-4">You&apos;ve reviewed all cards!</p>
+            <p className="text-gray-600 mb-2">You&apos;ve reviewed all cards!</p>
+
+            {/* Austin's Easter Egg Message */}
+            <div className="bg-gradient-to-r from-pink-100 to-rose-100 rounded-lg p-4 mb-4 max-w-md mx-auto border border-pink-200">
+              <p className="text-pink-600 font-medium italic">&ldquo;{completionPhrase}&rdquo;</p>
+              <p className="text-pink-400 text-sm mt-1">— Austin 💕</p>
+            </div>
+
             <div className="flex gap-4 justify-center">
               <button
                 onClick={handleReset}

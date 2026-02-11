@@ -1,8 +1,19 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-// Step 1: Fake Login Page
+// Step 1: Name Verification Page
 function FakeLoginPage({ onLogin }) {
+  const [name, setName] = useState('')
+  const [error, setError] = useState('')
+
+  const handleSubmit = () => {
+    if (name.toLowerCase() === 'malia') {
+      onLogin()
+    } else {
+      setError('Hmm, that doesn\'t seem right... Try again!')
+    }
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200">
       <div className="bg-white rounded-2xl shadow-xl p-8 md:p-12 max-w-md mx-4 w-full">
@@ -16,22 +27,19 @@ function FakeLoginPage({ onLogin }) {
 
         <div className="space-y-4 mb-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">The name of the hottest girl there is</label>
             <input
-              type="email"
-              placeholder="your@email.com"
+              type="text"
+              placeholder="Enter her name..."
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-              defaultValue=""
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value)
+                setError('')
+              }}
+              onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-            <input
-              type="password"
-              placeholder="••••••••"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-              defaultValue=""
-            />
+            {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
           </div>
         </div>
 
@@ -42,7 +50,7 @@ function FakeLoginPage({ onLogin }) {
         </div>
 
         <button
-          onClick={onLogin}
+          onClick={handleSubmit}
           className="w-full py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors"
         >
           Continue to Survey
@@ -66,7 +74,8 @@ function BoyfriendSurvey({ onYes }) {
     if (!noButtonRef.current || !containerRef.current) return
 
     const noButton = noButtonRef.current.getBoundingClientRect()
-    const container = containerRef.current.getBoundingClientRect()
+    const viewportHeight = window.innerHeight
+    const viewportWidth = window.innerWidth
 
     const mouseX = e.clientX
     const mouseY = e.clientY
@@ -78,20 +87,46 @@ function BoyfriendSurvey({ onYes }) {
       Math.pow(mouseX - buttonCenterX, 2) + Math.pow(mouseY - buttonCenterY, 2)
     )
 
-    // If mouse is close to button, move it away
-    if (distance < 120) {
+    // Simple bounds: limit movement to a reasonable range from center
+    const padding = 60
+    const maxX = (viewportWidth / 2) - padding
+    const maxY = (viewportHeight / 2) - 150  // More restrictive on Y to stay visible
+
+    // If mouse is very close to button (about to touch it), jump to escape
+    if (distance < 60) {
+      // Jump to opposite side or random safe spot
+      let newX = -noButtonPosition.x
+      let newY = -noButtonPosition.y
+
+      // Add some randomness to make it less predictable
+      newX += (Math.random() - 0.5) * 100
+      newY += (Math.random() - 0.5) * 100
+
+      // Clamp to bounds
+      newX = Math.max(-maxX, Math.min(maxX, newX))
+      newY = Math.max(-maxY, Math.min(maxY, newY))
+
+      setNoButtonPosition({ x: newX, y: newY })
+    }
+    // If mouse is approaching, move away smoothly
+    else if (distance < 150) {
       const angle = Math.atan2(buttonCenterY - mouseY, buttonCenterX - mouseX)
-      const moveDistance = 150
-      let newX = Math.cos(angle) * moveDistance + noButtonPosition.x
-      let newY = Math.sin(angle) * moveDistance + noButtonPosition.y
+      const moveDistance = 80 * (1 - distance / 150)
+      let newX = noButtonPosition.x + Math.cos(angle) * moveDistance
+      let newY = noButtonPosition.y + Math.sin(angle) * moveDistance
 
-      // Keep button within container bounds
-      const maxX = container.width / 2 - 80
-      const maxY = container.height / 2 - 40
+      // Check if we're hitting a boundary
+      const wouldHitBoundary = Math.abs(newX) >= maxX || Math.abs(newY) >= maxY
 
-      // If hitting bounds, wrap to other side
-      if (Math.abs(newX) > maxX) newX = -newX * 0.5
-      if (Math.abs(newY) > maxY) newY = -newY * 0.5
+      if (wouldHitBoundary && distance < 100) {
+        // Jump to a safe spot on the opposite side
+        newX = -noButtonPosition.x * 0.8 + (Math.random() - 0.5) * 50
+        newY = -noButtonPosition.y * 0.8 + (Math.random() - 0.5) * 50
+      }
+
+      // Clamp to bounds
+      newX = Math.max(-maxX, Math.min(maxX, newX))
+      newY = Math.max(-maxY, Math.min(maxY, newY))
 
       setNoButtonPosition({ x: newX, y: newY })
     }
@@ -100,11 +135,13 @@ function BoyfriendSurvey({ onYes }) {
   // Handle touch for mobile
   const handleNoTouch = (e) => {
     e.preventDefault()
-    if (!containerRef.current) return
 
-    const container = containerRef.current.getBoundingClientRect()
-    const maxX = container.width / 2 - 100
-    const maxY = container.height / 2 - 60
+    const viewportHeight = window.innerHeight
+    const viewportWidth = window.innerWidth
+
+    const padding = 60
+    const maxX = (viewportWidth / 2) - padding
+    const maxY = (viewportHeight / 2) - 150
 
     setNoButtonPosition({
       x: (Math.random() - 0.5) * maxX * 1.5,
@@ -142,9 +179,10 @@ function BoyfriendSurvey({ onYes }) {
           <button
             ref={noButtonRef}
             onTouchStart={handleNoTouch}
-            className="px-8 py-3 bg-gray-300 text-gray-600 font-semibold rounded-lg transition-all duration-75 absolute"
+            className="px-8 py-3 bg-gray-300 text-gray-600 font-semibold rounded-lg absolute"
             style={{
               transform: `translate(calc(60px + ${noButtonPosition.x}px), ${noButtonPosition.y}px)`,
+              transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)'
             }}
           >
             No
@@ -184,7 +222,7 @@ function TransitionMessage({ onComplete }) {
   }, [showValentine, onComplete])
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-pink-100 to-rose-200">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-pink-100 to-rose-200 relative overflow-hidden">
       <div
         className="text-center p-8 transition-opacity duration-1000"
         style={{ opacity }}
@@ -194,6 +232,14 @@ function TransitionMessage({ onComplete }) {
           Well, that handsome, smart, generous man has one question for you...
         </h1>
       </div>
+
+      {/* Peeking GIF on the side */}
+      <img
+        src="/peeking.gif"
+        alt="Peeking"
+        className="absolute right-0 bottom-0 h-[34rem] md:h-[42rem] object-contain transition-opacity duration-1000"
+        style={{ opacity }}
+      />
     </div>
   )
 }
@@ -244,13 +290,18 @@ function ValentineQuestion({ onYes }) {
       <div className="text-center z-10 pointer-events-none">
         <div className="text-6xl mb-6 heartbeat">💝</div>
 
-        <h1 className="text-4xl md:text-5xl font-bold text-pink-600 mb-4">
-          Will You Be My Valentine?
+        <h1 className="text-3xl md:text-4xl font-bold text-pink-600 mb-4 max-w-lg mx-auto leading-tight">
+          Will you do me the honors of being my special girl this valentines?
         </h1>
 
         <p className="text-gray-600 mb-8 text-lg">
           There&apos;s only one answer... 💕
         </p>
+
+        {/* Fake No button that's unclickable */}
+        <div className="inline-block px-6 py-3 bg-gray-200 text-gray-400 rounded-full opacity-50 mb-6">
+          No
+        </div>
 
         <div className="text-gray-400 text-sm">
           {!hasInteracted && "(Move your mouse around...)"}
@@ -260,21 +311,15 @@ function ValentineQuestion({ onYes }) {
       {/* Yes button follows cursor */}
       <button
         onClick={onYes}
-        className="fixed px-8 py-4 bg-gradient-to-r from-pink-500 to-red-500 text-white text-xl font-bold rounded-full shadow-lg hover:shadow-xl transition-shadow z-50 pointer-events-auto"
+        className={`fixed px-8 py-4 bg-gradient-to-r from-pink-500 to-red-500 text-white text-xl font-bold rounded-full shadow-lg hover:shadow-xl z-50 pointer-events-auto transition-all duration-100 ${!hasInteracted ? 'opacity-0 scale-0' : 'opacity-100 scale-100'}`}
         style={{
           left: '50%',
           top: '50%',
-          transform: `translate(calc(-50% + ${mousePosition.x}px), calc(-50% + ${mousePosition.y}px))`,
-          transition: 'transform 0.1s ease-out'
+          transform: `translate(calc(-50% + ${mousePosition.x}px), calc(-50% + ${mousePosition.y}px))`
         }}
       >
         Yes! ❤️
       </button>
-
-      {/* Fake No button that's unclickable */}
-      <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 px-6 py-3 bg-gray-200 text-gray-400 rounded-full pointer-events-none opacity-50">
-        No
-      </div>
 
       <style>{`
         .heartbeat {
@@ -291,19 +336,62 @@ function ValentineQuestion({ onYes }) {
 
 // Step 5: Celebration
 function Celebration({ onComplete }) {
+  const [stage, setStage] = useState(1)
+
   useEffect(() => {
-    const timer = setTimeout(() => {
-      onComplete()
-    }, 5000)
-    return () => clearTimeout(timer)
+    // Stage 1: celebrate1.gif for 2 seconds
+    const timer1 = setTimeout(() => setStage(2), 2000)
+    // Stage 2: celebrate2.gif for 2 seconds
+    const timer2 = setTimeout(() => setStage(3), 4000)
+    // Stage 3: original celebration.gif, then complete after 5 more seconds
+    const timer3 = setTimeout(() => onComplete(), 9000)
+
+    return () => {
+      clearTimeout(timer1)
+      clearTimeout(timer2)
+      clearTimeout(timer3)
+    }
   }, [onComplete])
 
   const text = "Loading your baddie cards now"
 
+  // Stage 1 & 2: Just full screen GIFs
+  if (stage === 1) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-black overflow-hidden">
+        <img
+          src="/celebrate1.gif"
+          alt="Celebration"
+          className="w-full h-full object-contain"
+        />
+      </div>
+    )
+  }
+
+  if (stage === 2) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-black overflow-hidden">
+        <img
+          src="/celebrate2.gif"
+          alt="Celebration"
+          className="w-full h-full object-contain"
+        />
+      </div>
+    )
+  }
+
+  // Stage 3: Original celebration with rainbow text
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-black overflow-hidden relative">
-      {/* Rainbow animated text */}
-      <h1 className="text-3xl md:text-5xl font-bold mb-8 flex flex-wrap justify-center gap-1">
+    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-black overflow-hidden relative">
+      {/* Full screen GIF background */}
+      <img
+        src="/celebration.gif"
+        alt="Celebration"
+        className="absolute inset-0 w-full h-full object-cover"
+      />
+
+      {/* Rainbow animated text overlay */}
+      <h1 className="text-3xl md:text-5xl font-bold mb-8 flex flex-wrap justify-center gap-1 z-10 px-4 text-center drop-shadow-lg">
         {text.split('').map((char, i) => (
           <span
             key={i}
@@ -319,16 +407,10 @@ function Celebration({ onComplete }) {
         ))}
       </h1>
 
-      {/* GIF */}
-      <img
-        src="/celebration.gif"
-        alt="Celebration"
-        className="max-w-md w-full rounded-lg shadow-2xl"
-      />
-
       <style>{`
         .rainbow-letter {
           animation: rainbow 2s linear infinite;
+          text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
         }
         @keyframes rainbow {
           0% { color: #ff0000; }
