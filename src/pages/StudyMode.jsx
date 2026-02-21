@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { renderFormattedText } from '../utils/formatText'
 
 // Austin's flattering phrases for when Malia finishes a study set
 const austinPhrases = [
@@ -204,7 +205,7 @@ export default function StudyMode() {
                   Question
                 </div>
                 <div className="text-xl md:text-2xl text-gray-800 whitespace-pre-wrap">
-                  {currentCard?.front}
+                  {renderFormattedText(currentCard?.front)}
                 </div>
               </div>
             </div>
@@ -216,7 +217,7 @@ export default function StudyMode() {
                   Answer
                 </div>
                 <div className="text-xl md:text-2xl whitespace-pre-wrap">
-                  {currentCard?.back}
+                  {renderFormattedText(currentCard?.back)}
                 </div>
               </div>
             </div>

@@ -1,6 +1,89 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { renderFormattedText } from '../utils/formatText'
+
+function FormattedTextarea({ value, onChange, onBlur, placeholder, rows = 3 }) {
+  const textareaRef = useRef(null)
+
+  const wrapSelection = (marker) => {
+    const ta = textareaRef.current
+    if (!ta) return
+    const start = ta.selectionStart
+    const end = ta.selectionEnd
+    const text = ta.value
+    const selected = text.slice(start, end)
+
+    // If selection is already wrapped with this marker, unwrap it
+    const markerLen = marker.length
+    const before = text.slice(0, start)
+    const after = text.slice(end)
+    if (before.endsWith(marker) && after.startsWith(marker)) {
+      const newValue = before.slice(0, -markerLen) + selected + after.slice(markerLen)
+      onChange(newValue)
+      requestAnimationFrame(() => {
+        ta.selectionStart = start - markerLen
+        ta.selectionEnd = end - markerLen
+      })
+      return
+    }
+
+    const newValue = text.slice(0, start) + marker + selected + marker + text.slice(end)
+    onChange(newValue)
+    requestAnimationFrame(() => {
+      ta.selectionStart = start + markerLen
+      ta.selectionEnd = end + markerLen
+    })
+  }
+
+  const handleKeyDown = (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+      e.preventDefault()
+      wrapSelection('**')
+    } else if ((e.metaKey || e.ctrlKey) && e.key === 'u') {
+      e.preventDefault()
+      wrapSelection('__')
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex gap-1 mb-1">
+        <button
+          type="button"
+          onClick={() => wrapSelection('**')}
+          className="px-2 py-0.5 text-sm font-bold bg-gray-100 hover:bg-gray-200 rounded border border-gray-300 transition-colors"
+          title="Bold (Cmd+B)"
+        >
+          B
+        </button>
+        <button
+          type="button"
+          onClick={() => wrapSelection('__')}
+          className="px-2 py-0.5 text-sm underline bg-gray-100 hover:bg-gray-200 rounded border border-gray-300 transition-colors"
+          title="Underline (Cmd+U)"
+        >
+          U
+        </button>
+      </div>
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        rows={rows}
+        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 outline-none transition-shadow resize-none"
+      />
+      {value && (value.includes('**') || value.includes('__')) && (
+        <div className="mt-1 px-3 py-1.5 bg-gray-50 rounded border border-gray-200 text-sm whitespace-pre-wrap">
+          {renderFormattedText(value)}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function SetEditor() {
   const { id } = useParams()
@@ -13,6 +96,37 @@ export default function SetEditor() {
   const [saving, setSaving] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
   const [loading, setLoading] = useState(isEditing)
+  const [autoSaveStatus, setAutoSaveStatus] = useState(null)
+
+  const autoSaveTimerRef = useRef(null)
+  const statusTimerRef = useRef(null)
+  const latestRef = useRef({ title, description, cards, hasChanges })
+  const draftKey = id ? `flashcard-draft-${id}` : 'flashcard-draft-new'
+
+  // Keep ref in sync with latest state for debounced auto-save
+  useEffect(() => {
+    latestRef.current = { title, description, cards, hasChanges }
+  }, [title, description, cards, hasChanges])
+
+  // Restore draft from localStorage for new sets
+  useEffect(() => {
+    if (!isEditing) {
+      try {
+        const draft = localStorage.getItem(draftKey)
+        if (draft) {
+          const parsed = JSON.parse(draft)
+          if (parsed.title || parsed.cards?.some(c => c.front || c.back)) {
+            setTitle(parsed.title || '')
+            setDescription(parsed.description || '')
+            setCards(parsed.cards?.length > 0 ? parsed.cards : [{ front: '', back: '', id: crypto.randomUUID() }])
+            setHasChanges(true)
+            setAutoSaveStatus('restored')
+            setTimeout(() => setAutoSaveStatus(null), 3000)
+          }
+        }
+      } catch (e) { /* ignore parse errors */ }
+    }
+  }, [])
 
   useEffect(() => {
     if (isEditing) {
@@ -37,6 +151,20 @@ export default function SetEditor() {
       }
     } catch (error) {
       console.error('Error fetching set:', error)
+      // Try restoring from localStorage draft if Supabase is down
+      try {
+        const draft = localStorage.getItem(draftKey)
+        if (draft) {
+          const parsed = JSON.parse(draft)
+          setTitle(parsed.title || '')
+          setDescription(parsed.description || '')
+          setCards(parsed.cards?.length > 0 ? parsed.cards : [{ front: '', back: '', id: crypto.randomUUID() }])
+          setAutoSaveStatus('restored')
+          setTimeout(() => setAutoSaveStatus(null), 3000)
+          setLoading(false)
+          return
+        }
+      } catch (e) { /* ignore */ }
       navigate('/dashboard')
     } finally {
       setLoading(false)
@@ -83,6 +211,88 @@ export default function SetEditor() {
     setCards(newCards)
     setHasChanges(true)
   }
+
+  // Auto-save: localStorage always, Supabase when editing
+  const performAutoSave = useCallback(async () => {
+    const { title, description, cards, hasChanges } = latestRef.current
+    if (!hasChanges) return
+
+    // Always save to localStorage
+    try {
+      localStorage.setItem(draftKey, JSON.stringify({ title, description, cards }))
+    } catch (e) { /* localStorage full or unavailable */ }
+
+    // Auto-save to Supabase only when editing an existing set
+    if (!isEditing || !id) {
+      setAutoSaveStatus('draft-saved')
+      if (statusTimerRef.current) clearTimeout(statusTimerRef.current)
+      statusTimerRef.current = setTimeout(() => setAutoSaveStatus(null), 2000)
+      return
+    }
+
+    if (!title.trim()) return
+    const validCards = cards.filter(card => card.front.trim() || card.back.trim())
+    if (validCards.length === 0) return
+
+    setAutoSaveStatus('saving')
+    try {
+      const { error } = await supabase
+        .from('flashcard_sets')
+        .update({
+          title: title.trim(),
+          description: description.trim() || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+
+      if (error) throw error
+
+      await supabase.from('flashcards').delete().eq('set_id', id)
+
+      const cardsToInsert = validCards.map((card, index) => ({
+        set_id: id,
+        front: card.front.trim(),
+        back: card.back.trim(),
+        position: index
+      }))
+
+      const { error: cardsError } = await supabase
+        .from('flashcards')
+        .insert(cardsToInsert)
+
+      if (cardsError) throw cardsError
+
+      setHasChanges(false)
+      setAutoSaveStatus('saved')
+      localStorage.removeItem(draftKey)
+    } catch (error) {
+      console.error('Auto-save to server failed:', error)
+      setAutoSaveStatus('error')
+    }
+
+    if (statusTimerRef.current) clearTimeout(statusTimerRef.current)
+    statusTimerRef.current = setTimeout(() => setAutoSaveStatus(null), 2000)
+  }, [draftKey, isEditing, id])
+
+  // Keep ref to latest auto-save for debounced timeout
+  const autoSaveRef = useRef(performAutoSave)
+  useEffect(() => { autoSaveRef.current = performAutoSave }, [performAutoSave])
+
+  // Debounced blur handler — triggers auto-save 500ms after leaving a field
+  const handleBlur = useCallback(() => {
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+    autoSaveTimerRef.current = setTimeout(() => {
+      autoSaveRef.current()
+    }, 500)
+  }, [])
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+      if (statusTimerRef.current) clearTimeout(statusTimerRef.current)
+    }
+  }, [])
 
   const handleSave = async () => {
     if (!title.trim()) {
@@ -146,10 +356,15 @@ export default function SetEditor() {
       if (cardsError) throw cardsError
 
       setHasChanges(false)
+      localStorage.removeItem(draftKey)
       navigate('/dashboard')
     } catch (error) {
       console.error('Error saving set:', error)
-      alert('Error saving set. Please try again.')
+      // Save to localStorage as fallback so data isn't lost
+      try {
+        localStorage.setItem(draftKey, JSON.stringify({ title, description, cards }))
+      } catch (e) { /* ignore */ }
+      alert('Error saving set. Your changes have been saved locally and will be restored when you return.')
     } finally {
       setSaving(false)
     }
@@ -192,6 +407,22 @@ export default function SetEditor() {
               {isEditing ? 'Edit Set' : 'Create New Set'}
             </h1>
           </div>
+          <div className="flex items-center gap-3">
+            {autoSaveStatus && (
+              <span className={`text-sm transition-opacity ${
+                autoSaveStatus === 'saving' ? 'text-gray-400' :
+                autoSaveStatus === 'saved' ? 'text-green-500' :
+                autoSaveStatus === 'draft-saved' ? 'text-blue-400' :
+                autoSaveStatus === 'restored' ? 'text-blue-500' :
+                'text-red-400'
+              }`}>
+                {autoSaveStatus === 'saving' ? 'Saving...' :
+                 autoSaveStatus === 'saved' ? '✓ Saved' :
+                 autoSaveStatus === 'draft-saved' ? '✓ Draft saved' :
+                 autoSaveStatus === 'restored' ? 'Restored from draft' :
+                 '⚠ Save failed — draft saved locally'}
+              </span>
+            )}
           <button
             onClick={handleSave}
             disabled={saving}
@@ -199,6 +430,7 @@ export default function SetEditor() {
           >
             {saving ? 'Saving...' : 'Save Set'}
           </button>
+          </div>
         </div>
       </header>
 
@@ -214,6 +446,7 @@ export default function SetEditor() {
               type="text"
               value={title}
               onChange={(e) => handleTitleChange(e.target.value)}
+              onBlur={handleBlur}
               placeholder="e.g., Con Law — First Amendment"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 outline-none transition-shadow"
             />
@@ -226,6 +459,7 @@ export default function SetEditor() {
               type="text"
               value={description}
               onChange={(e) => handleDescriptionChange(e.target.value)}
+              onBlur={handleBlur}
               placeholder="e.g., Key cases and concepts for final exam"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 outline-none transition-shadow"
             />
@@ -284,24 +518,22 @@ export default function SetEditor() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Front (Term/Question)
                   </label>
-                  <textarea
+                  <FormattedTextarea
                     value={card.front}
-                    onChange={(e) => handleCardChange(index, 'front', e.target.value)}
+                    onChange={(val) => handleCardChange(index, 'front', val)}
+                    onBlur={handleBlur}
                     placeholder="Enter term or question"
-                    rows={3}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 outline-none transition-shadow resize-none"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Back (Definition/Answer)
                   </label>
-                  <textarea
+                  <FormattedTextarea
                     value={card.back}
-                    onChange={(e) => handleCardChange(index, 'back', e.target.value)}
+                    onChange={(val) => handleCardChange(index, 'back', val)}
+                    onBlur={handleBlur}
                     placeholder="Enter definition or answer"
-                    rows={3}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 outline-none transition-shadow resize-none"
                   />
                 </div>
               </div>
