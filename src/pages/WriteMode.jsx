@@ -116,6 +116,16 @@ export default function WriteMode() {
     }
   }
 
+  const handleOverride = () => {
+    if (!result || result.isCorrect) return
+    const card = queue[currentIndex]
+    roundResults.current[card.id] = true
+    if (round === 1) {
+      setScores(prev => ({ ...prev, [card.id]: { firstTryCorrect: true } }))
+    }
+    setResult({ ...result, isCorrect: true })
+  }
+
   const handleNext = () => {
     if (currentIndex < queue.length - 1) {
       setCurrentIndex(currentIndex + 1)
@@ -295,16 +305,24 @@ export default function WriteMode() {
 
             {/* Correct answer */}
             {!result.isCorrect && (
-              <div className="bg-white rounded-xl shadow border border-gray-200 p-4 mb-4">
-                <div className="text-sm text-gray-400 uppercase tracking-wide mb-2">Correct answer</div>
-                <div className="text-lg leading-relaxed flex flex-wrap gap-1">
-                  {result.correctWords.map((w, i) => (
-                    <span key={i} className={`px-1 rounded ${w.missing ? 'text-pink-600 bg-pink-50 font-semibold underline' : 'text-gray-700'}`}>
-                      {w.text}
-                    </span>
-                  ))}
+              <>
+                <div className="bg-white rounded-xl shadow border border-gray-200 p-4 mb-3">
+                  <div className="text-sm text-gray-400 uppercase tracking-wide mb-2">Correct answer</div>
+                  <div className="text-lg leading-relaxed flex flex-wrap gap-1">
+                    {result.correctWords.map((w, i) => (
+                      <span key={i} className={`px-1 rounded ${w.missing ? 'text-pink-600 bg-pink-50 font-semibold underline' : 'text-gray-700'}`}>
+                        {w.text}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              </div>
+                <button
+                  onClick={handleOverride}
+                  className="w-full py-2 text-sm text-gray-400 hover:text-green-500 transition-colors"
+                >
+                  Override: I was right
+                </button>
+              </>
             )}
 
             <button

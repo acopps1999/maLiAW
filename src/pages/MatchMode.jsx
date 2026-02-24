@@ -332,7 +332,7 @@ export default function MatchMode() {
                   onClick={() => handleTileClick(tile.id)}
                   className={`
                     h-28 sm:h-32 rounded-xl border-2 p-2 text-sm font-medium transition-all duration-200 cursor-pointer
-                    flex items-center justify-center text-center leading-tight
+                    flex items-start justify-center text-center leading-tight
                     overflow-hidden hover:overflow-y-auto match-tile-scroll
                     ${isShaking ? 'match-tile-shake border-red-300 bg-red-50 text-red-500' : ''}
                     ${isSelected && !isShaking ? 'bg-pink-500 border-pink-500 text-white shadow-lg scale-105' : ''}
