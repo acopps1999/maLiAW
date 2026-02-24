@@ -31,6 +31,22 @@ const getRandomPhrase = () => {
   return austinPhrases[Math.floor(Math.random() * austinPhrases.length)]
 }
 
+function ModeSwitcher({ id }) {
+  return (
+    <div className="flex gap-1 bg-pink-50 rounded-lg p-1">
+      <span className="px-3 py-1.5 rounded-md text-sm font-medium bg-pink-500 text-white">
+        Flashcards
+      </span>
+      <Link to={`/sets/${id}/write`} className="px-3 py-1.5 rounded-md text-sm font-medium text-pink-400 hover:text-pink-600 transition-colors">
+        Write
+      </Link>
+      <Link to={`/sets/${id}/match`} className="px-3 py-1.5 rounded-md text-sm font-medium text-pink-400 hover:text-pink-600 transition-colors">
+        Match
+      </Link>
+    </div>
+  )
+}
+
 export default function StudyMode() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -161,18 +177,19 @@ export default function StudyMode() {
           <div className="flex items-center gap-2">
             <button
               onClick={handleShuffle}
-              className="px-4 py-2 text-gray-600 hover:text-pink-500 transition-colors"
+              className="px-4 py-2 text-gray-600 hover:text-pink-500 transition-colors hidden sm:inline-flex"
               title="Shuffle cards"
             >
               🔀 Shuffle
             </button>
             <button
               onClick={handleReset}
-              className="px-4 py-2 text-gray-600 hover:text-pink-500 transition-colors"
+              className="px-4 py-2 text-gray-600 hover:text-pink-500 transition-colors hidden sm:inline-flex"
               title="Start over"
             >
               ↺ Reset
             </button>
+            <ModeSwitcher id={id} />
           </div>
         </div>
       </header>
@@ -195,7 +212,7 @@ export default function StudyMode() {
         {/* Flashcard */}
         <div
           onClick={handleFlip}
-          className={`flip-card w-full max-w-2xl h-80 cursor-pointer ${isFlipped ? 'flipped' : ''}`}
+          className={`flip-card w-full max-w-2xl min-h-80 cursor-pointer ${isFlipped ? 'flipped' : ''}`}
         >
           <div className="flip-card-inner">
             {/* Front */}

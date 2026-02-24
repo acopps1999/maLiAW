@@ -3,6 +3,8 @@ import ValentineGate from './pages/ValentineGate'
 import Dashboard from './pages/Dashboard'
 import SetEditor from './pages/SetEditor'
 import StudyMode from './pages/StudyMode'
+import WriteMode from './pages/WriteMode'
+import MatchMode from './pages/MatchMode'
 
 function App() {
   const hasAcceptedValentine = localStorage.getItem('valentineAccepted') === 'true'
@@ -17,6 +19,8 @@ function App() {
       <Route path="/sets/new" element={<SetEditor />} />
       <Route path="/sets/:id/edit" element={<SetEditor />} />
       <Route path="/sets/:id/study" element={<StudyMode />} />
+      <Route path="/sets/:id/write" element={<WriteMode />} />
+      <Route path="/sets/:id/match" element={<MatchMode />} />
     </Routes>
   )
 }
